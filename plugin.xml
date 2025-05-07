@@ -9,7 +9,6 @@
     <clobbers target="BrazePlugin" />
     <clobbers target="AppboyPlugin" />
   </js-module>
-
   <!-- android -->
   <platform name="android">
     <config-file target="res/xml/config.xml" parent="/*">
@@ -35,7 +34,6 @@
       </service>
     </config-file>
   </platform>
-
   <!-- ios -->
   <platform name="ios">
     <config-file target="config.xml" parent="/*">
@@ -53,9 +51,9 @@
         <source url="https://cdn.cocoapods.org/"/>
       </config>
       <pods use-frameworks="true">
-        <pod name="BrazeKit" spec="~> 11.6.1" />
-        <pod name="BrazeUI" spec="~> 11.6.1" />
-        <pod name="BrazeLocation" spec="~> 11.6.1" />
+        <pod name="BrazeKit" podspec="https://raw.githubusercontent.com/braze-inc/braze-swift-sdk-prebuilt-dynamic/10.1.0/BrazeKit.podspec" />
+        <pod name="BrazeUI" podspec="https://raw.githubusercontent.com/braze-inc/braze-swift-sdk-prebuilt-dynamic/10.1.0/BrazeUI.podspec" />
+        <pod name="BrazeLocation" podspec="https://raw.githubusercontent.com/braze-inc/braze-swift-sdk-prebuilt-dynamic/10.1.0/BrazeLocation.podspec" />
       </pods>
     </podspec>
   </platform>
