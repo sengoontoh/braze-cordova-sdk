@@ -1,4 +1,4 @@
-<img src="https://github.com/Appboy/appboy-cordova-sdk/blob/master/braze-logo.png" width="300" title="Braze Logo" />
+<img src="https://github.com/braze-inc/braze-cordova-sdk/blob/master/braze-logo.png" width="300" title="Braze Logo" />
 
 # Cordova SDK
 
@@ -6,11 +6,18 @@ Effective marketing automation is an essential part of successfully scaling and 
 
 See our [Technical Documentation for Android](https://www.braze.com/docs/developer_guide/platform_integration_guides/cordova/initial_sdk_setup/android/) and [Technical Documentation for iOS](https://www.braze.com/docs/developer_guide/platform_integration_guides/cordova/initial_sdk_setup/ios/) for instructions on integrating Braze into your Cordova app.
 
-# Running the sample application
+## Minimum version requirements
+
+| Braze Plugin | Cordova Android | Cordova iOS |
+| ------------ | --------------- | ----------- |
+| 10.0.0+      | >= 13.0.0       | >= 5.0.0    |
+| 2.31.0+      | >= 12.0.0       | >= 5.0.0    |
+
+## Running the sample application
 
 ```
-cordova plugin remove cordova-plugin-appboy
-cordova plugin add https://github.com/appboy/appboy-cordova-sdk#master
+cordova plugin remove cordova-plugin-braze
+cordova plugin add https://github.com/braze-inc/braze-cordova-sdk#master
 
 # To run android
 cordova run android
