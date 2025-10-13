@@ -2,8 +2,11 @@ package com.braze.cordova
 
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
 import android.os.Build
+import android.os.Bundle
 import android.util.Log
+import android.widget.ImageView
 import com.braze.Braze
 import com.braze.BrazeUser
 import com.braze.configuration.BrazeConfig
@@ -11,20 +14,32 @@ import com.braze.cordova.ContentCardUtils.getCardById
 import com.braze.cordova.ContentCardUtils.mapContentCards
 import com.braze.cordova.CordovaInAppMessageViewWrapper.CordovaInAppMessageViewWrapperFactory
 import com.braze.cordova.FeatureFlagUtils.mapFeatureFlags
-import com.braze.enums.*
+import com.braze.enums.BrazeSdkMetadata
+import com.braze.enums.BrazeViewBounds
+import com.braze.enums.CardCategory
+import com.braze.enums.Channel
+import com.braze.enums.Gender
+import com.braze.enums.Month
+import com.braze.enums.NotificationSubscriptionType
+import com.braze.enums.SdkFlavor
 import com.braze.enums.inappmessage.ClickAction
 import com.braze.events.ContentCardsUpdatedEvent
 import com.braze.events.FeatureFlagsUpdatedEvent
 import com.braze.events.FeedUpdatedEvent
 import com.braze.events.IEventSubscriber
-import com.braze.models.outgoing.AttributionData
-import com.braze.models.outgoing.BrazeProperties
+import com.braze.images.IBrazeImageLoader
+import com.braze.models.cards.Card
 import com.braze.models.inappmessage.IInAppMessage
 import com.braze.models.inappmessage.IInAppMessageImmersive
 import com.braze.models.inappmessage.InAppMessageBase
 import com.braze.models.inappmessage.InAppMessageImmersiveBase
 import com.braze.models.inappmessage.MessageButton
-import com.braze.support.BrazeLogger.Priority.*
+import com.braze.models.outgoing.AttributionData
+import com.braze.models.outgoing.BrazeProperties
+import com.braze.support.BrazeLogger.Priority.D
+import com.braze.support.BrazeLogger.Priority.E
+import com.braze.support.BrazeLogger.Priority.I
+import com.braze.support.BrazeLogger.Priority.W
 import com.braze.support.BrazeLogger.brazelog
 import com.braze.support.BrazeLogger.logLevel
 import com.braze.support.requestPushPermissionPrompt
@@ -36,6 +51,8 @@ import com.braze.ui.activities.ContentCardsActivity
 import com.braze.ui.inappmessage.BrazeInAppMessageManager
 import com.braze.ui.inappmessage.InAppMessageOperation
 import com.braze.ui.inappmessage.listeners.DefaultInAppMessageManagerListener
+import com.bumptech.glide.Glide
+import com.bumptech.glide.request.RequestOptions
 import org.apache.cordova.CallbackContext
 import org.apache.cordova.CordovaPlugin
 import org.apache.cordova.CordovaPreferences
@@ -44,7 +61,8 @@ import org.json.JSONArray
 import org.json.JSONException
 import org.json.JSONObject
 import java.math.BigDecimal
-import java.util.*
+import java.util.EnumSet
+import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 
 @Suppress("TooManyFunctions", "MaxLineLength", "WildcardImport")
@@ -64,6 +82,7 @@ open class BrazePlugin : CordovaPlugin() {
         // Since we've likely passed the first Application.onCreate() (due to the plugin lifecycle), lets call the
         // in-app message manager and session handling now
         BrazeInAppMessageManager.getInstance().registerInAppMessageManager(cordova.activity)
+        Braze.getInstance(applicationContext).imageLoader = GlideBrazeImageLoader()
         pluginInitializationFinished = true
     }
 
@@ -1200,6 +1219,78 @@ open class BrazePlugin : CordovaPlugin() {
 
         private fun CallbackContext.sendCordovaSuccessPluginResultAsNull() {
             this.sendPluginResult(PluginResult(PluginResult.Status.OK, null as String?))
+        }
+    }
+
+    private class GlideBrazeImageLoader : IBrazeImageLoader {
+
+        private var requestOptions = RequestOptions()
+
+        override fun getInAppMessageBitmapFromUrl(
+            context: Context,
+            inAppMessage: IInAppMessage,
+            imageUrl: String,
+            viewBounds: BrazeViewBounds?
+        ): Bitmap? {
+            return getBitmapFromUrl(context, imageUrl)
+        }
+
+        override fun getPushBitmapFromUrl(
+            context: Context,
+            extras: Bundle?,
+            imageUrl: String,
+            viewBounds: BrazeViewBounds?
+        ): Bitmap? {
+            return getBitmapFromUrl(context, imageUrl)
+        }
+
+        override fun renderUrlIntoCardView(
+            context: Context,
+            card: Card,
+            imageUrl: String,
+            imageView: ImageView,
+            viewBounds: BrazeViewBounds?
+        ) {
+            renderUrlIntoView(context, imageUrl, imageView)
+        }
+
+        override fun renderUrlIntoInAppMessageView(
+            context: Context,
+            inAppMessage: IInAppMessage,
+            imageUrl: String,
+            imageView: ImageView,
+            viewBounds: BrazeViewBounds?
+        ) {
+            renderUrlIntoView(context, imageUrl, imageView)
+        }
+
+        private fun renderUrlIntoView(context: Context, imageUrl: String, imageView: ImageView) {
+            Glide.with(context)
+                .load(imageUrl)
+                .apply(requestOptions)
+                .into(imageView)
+        }
+
+        private fun getBitmapFromUrl(context: Context, imageUrl: String): Bitmap? {
+            try {
+                return Glide.with(context)
+                    .asBitmap()
+                    .apply(requestOptions)
+                    .load(imageUrl).submit().get()
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to retrieve bitmap at url: $imageUrl", e)
+            }
+
+            return null
+        }
+
+        override fun setOffline(isOffline: Boolean) {
+            // If the loader is offline, then we should only be retrieving from the cache
+            requestOptions = requestOptions.onlyRetrieveFromCache(isOffline)
+        }
+
+        companion object {
+            private const val TAG = "GlideBrazeImageLoader"
         }
     }
 }
