@@ -1,4 +1,5 @@
 #import "BrazePlugin.h"
+#import "AppDelegate+Braze.h"
 
 @import BrazeKit;
 @import BrazeLocation;
@@ -6,37 +7,25 @@
 @import UserNotifications;
 
 @interface BrazePlugin() <BrazeSDKAuthDelegate, BrazeInAppMessageUIDelegate>
-  // Api
   @property NSString *APIKey;
-  @property NSString *apiEndpoint;
-  @property NSString *useAutomaticRequestPolicy;
-  @property NSString *flushInterval;
-  @property NSString *enableSDKAuth;
-
-  // Push
-  @property NSString *pushAppGroup;
-  @property NSString *disableAutomaticPushHandling;
   @property NSString *disableAutomaticPushRegistration;
-  @property NSString *disableUNAuthorizationOptionProvisional;
-  @property NSString *displayForegroundPushNotifications;
-
-  // Location
+  @property NSString *disableAutomaticPushHandling;
+  @property NSString *apiEndpoint;
+  @property NSString *enableIDFACollection;
   @property NSString *enableLocationCollection;
   @property NSString *enableGeofences;
-
-  // Logger
-  @property NSString *logLevel;
-
-  // General
+  @property NSString *disableUNAuthorizationOptionProvisional;
   @property NSString *sessionTimeout;
-  @property NSString *triggerActionMinimumTimeInterval;
-  @property NSString *useUUIDAsDeviceId;
-  @property NSString *forwardUniversalLinks;
-  @property NSString *optInWhenPushAuthorized;
-  @property NSString *enableIDFACollection;
-
-  // Others
+  @property NSString *enableSDKAuth;
   @property NSString *sdkAuthCallbackID;
+  @property NSString *triggerActionMinimumTimeInterval;
+  @property NSString *pushAppGroup;
+  @property NSString *forwardUniversalLinks;
+  @property NSString *logLevel;
+  @property NSString *useUUIDAsDeviceId;
+  @property NSString *flushInterval;
+  @property NSString *useAutomaticRequestPolicy;
+  @property NSString *optInWhenPushAuthorized;
 @end
 
 static Braze *_braze;
@@ -56,47 +45,39 @@ bool useBrazeUIForInAppMessages;
 
 - (void)pluginInitialize {
   NSDictionary *settings = self.commandDelegate.settings;
-  
-  // Api
-  self.APIKey = settings[@"com.braze.ios_api_key"];
-  if (self.APIKey == nil) {
-    // Fallback to the deprecated API key setting
-    self.APIKey = settings[@"com.braze.api_key"];
-  }
-  self.apiEndpoint = settings[@"com.braze.ios_api_endpoint"];
-  self.useAutomaticRequestPolicy = settings[@"com.braze.ios_use_automatic_request_policy"];
-  self.flushInterval = settings[@"com.braze.ios_flush_interval_seconds"];
-  self.enableSDKAuth = settings[@"com.braze.sdk_authentication_enabled"];
-  
-  // Push
-  self.pushAppGroup = settings[@"com.braze.ios_push_app_group"];
-  self.disableAutomaticPushHandling = settings[@"com.braze.ios_disable_automatic_push_handling"];
+  self.APIKey = settings[@"com.braze.api_key"];
   self.disableAutomaticPushRegistration = settings[@"com.braze.ios_disable_automatic_push_registration"];
-  self.disableUNAuthorizationOptionProvisional = settings[@"com.braze.ios_disable_un_authorization_option_provisional"];
-  self.displayForegroundPushNotifications = settings[@"com.braze.display_foreground_push_notifications"];
-  
-  // Location
+  self.disableAutomaticPushHandling = settings[@"com.braze.ios_disable_automatic_push_handling"];
+  self.apiEndpoint = settings[@"com.braze.ios_api_endpoint"];
+  self.enableIDFACollection = settings[@"com.braze.ios_enable_idfa_automatic_collection"];
   self.enableLocationCollection = settings[@"com.braze.enable_location_collection"];
   self.enableGeofences = settings[@"com.braze.geofences_enabled"];
-  
-  // Logger
-  self.logLevel = settings[@"com.braze.ios_log_level"];
-  
-  // General
+  self.disableUNAuthorizationOptionProvisional = settings[@"com.braze.ios_disable_un_authorization_option_provisional"];
   self.sessionTimeout = settings[@"com.braze.ios_session_timeout"];
+  self.enableSDKAuth = settings[@"com.braze.sdk_authentication_enabled"];
   self.triggerActionMinimumTimeInterval = settings[@"com.braze.trigger_action_minimum_time_interval_seconds"];
-  self.useUUIDAsDeviceId = settings[@"com.braze.ios_use_uuid_as_device_id"];
+  self.pushAppGroup = settings[@"com.braze.ios_push_app_group"];
   self.forwardUniversalLinks = settings[@"com.braze.ios_forward_universal_links"];
+  self.logLevel = settings[@"com.braze.ios_log_level"];
+  self.useUUIDAsDeviceId = settings[@"com.braze.ios_use_uuid_as_device_id"];
+  self.flushInterval = settings[@"com.braze.ios_flush_interval_seconds"];
+  self.useAutomaticRequestPolicy = settings[@"com.braze.ios_use_automatic_request_policy"];
   self.optInWhenPushAuthorized = settings[@"com.braze.should_opt_in_when_push_authorized"];
-  self.enableIDFACollection = settings[@"com.braze.ios_enable_idfa_automatic_collection"];
-
   isInAppMessageSubscribed = NO;
   useBrazeUIForInAppMessages = YES;
 
-  [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(didFinishLaunchingListener:) name:UIApplicationDidFinishLaunchingNotification object:nil];
+  // Set automatic push handling
+  if (![[self sanitizeString:self.disableAutomaticPushHandling] isEqualToString:@"yes"]) {
+    [AppDelegate swizzleHostAppDelegate];
+    NSLog(@"Automatic push handling enabled.");
+  } else {
+    NSLog(@"Automatic push handling disabled.");
+  }
+    
+    [self setup];
 }
 
-- (void)didFinishLaunchingListener:(NSNotification *)notification {
+- (void)setup {
   BRZConfiguration *configuration = [[BRZConfiguration alloc] initWithApiKey:self.APIKey
                                                                     endpoint:self.apiEndpoint];
   
@@ -111,52 +92,6 @@ bool useBrazeUIForInAppMessages;
     NSLog(@"Log level set to: %hhu", (BRZLoggerLevel)levelCast);
   } else {
     NSLog(@"Log level value not valid. Setting value to: error (2).");
-  }
-  
-  // ---- Push Notifications configuration
-  
-  // Set push automation from preferences
-  if (![[self sanitizeString:self.disableAutomaticPushHandling] isEqualToString:@"yes"]) {
-    // Enables all push automation
-    configuration.push.automation = [[BRZConfigurationPushAutomation alloc] initEnablingAllAutomations:YES];
-    // - Disable `willPresentNotification`, this is configured below from the
-    //   `displayForegroundPushNotifications` setting
-    configuration.push.automation.willPresentNotification = NO;
-    // - Disable `requestAuthorizationAtLaunch`, this is configured below from the
-    //   `disableAutomaticPushRegistration` setting
-    configuration.push.automation.requestAuthorizationAtLaunch = NO;
-    NSLog(@"Automatic push handling enabled.");
-  } else {
-    NSLog(@"Automatic push handling disabled.");
-  }
-
-  // Set display foreground push notifications
-  if ([[self sanitizeString:self.displayForegroundPushNotifications] isEqualToString:@"yes"]) {
-    configuration.push.automation.willPresentNotification = YES;
-    NSLog(@"Foreground push notifications enabled.");
-  } else {
-    NSLog(@"Foreground push notifications disabled.");
-  }
-  
-  // Set automatic request notification authorization
-  if (![[self sanitizeString:self.disableAutomaticPushRegistration] isEqualToString:@"yes"]) {
-    // Enable automatic push registration and device token registration
-    configuration.push.automation.automaticSetup = YES;
-    configuration.push.automation.registerDeviceToken = YES;
-    // Enable request notification authorization
-    configuration.push.automation.requestAuthorizationAtLaunch = YES;
-    NSLog(@"Automatic push registration enabled.");
-    // Set provisional notification authorization
-    if (@available(iOS 12.0, *)) {
-      if (![[self sanitizeString:self.disableUNAuthorizationOptionProvisional] isEqualToString:@"yes"]) {
-        configuration.push.automation.authorizationOptions |= UNAuthorizationOptionProvisional;
-        NSLog(@"Provisional push authorization enabled.");
-      } else {
-        NSLog(@"Provisional push authorization disabled.");
-      }
-    }
-  } else {
-    NSLog(@"Automatic push registration disabled.");
   }
 
   // Set location collection from preferences
@@ -272,6 +207,34 @@ bool useBrazeUIForInAppMessages;
   } else {
     NSLog(@"SDK authentication disabled.");
   }
+
+  // Set automatic push registration and request notification authorization
+  if (![[self sanitizeString:self.disableAutomaticPushRegistration] isEqualToString:@"yes"]) {
+    UNUserNotificationCenter *center = [UNUserNotificationCenter currentNotificationCenter];
+    // If the delegate hasn't been set yet, set it here in the plugin
+    if (center.delegate == nil) {
+      center.delegate = [UIApplication sharedApplication].delegate;
+    }
+    UNAuthorizationOptions options = UNAuthorizationOptionAlert | UNAuthorizationOptionSound | UNAuthorizationOptionBadge;
+    if (@available(iOS 12.0, *)) {
+      if (![[self sanitizeString:self.disableUNAuthorizationOptionProvisional] isEqualToString:@"yes"]) {
+        options = options | UNAuthorizationOptionProvisional;
+      }
+    }
+    [center requestAuthorizationWithOptions:options
+                          completionHandler:^(BOOL granted, NSError *_Nullable error) {
+      // Braze automatically retrieves the push notification authorization settings after the user interacts with the permission prompt.
+      if (error) {
+        NSLog(@"%@", error.debugDescription);
+      } else {
+        NSLog(@"Notification authorization successfully requested.");
+      }
+    }];
+    [[UIApplication sharedApplication] registerForRemoteNotifications];
+    NSLog(@"Automatic push registration enabled.");
+  } else {
+    NSLog(@"Automatic push registration disabled.");
+  }
 }
 
 // MARK: - Braze
@@ -286,12 +249,13 @@ bool useBrazeUIForInAppMessages;
 }
 
 - (void)getUserId:(CDVInvokedUrlCommand *)command {
-  NSString *userId = self.braze.user.identifier;
-  if (!userId) {
-    [self sendCordovaSuccessPluginResultAsNull:command];
-  } else {
-    [self sendCordovaSuccessPluginResultWithString:userId andCommand:command];
-  }
+  [self.braze.user idWithCompletion:^(NSString * _Nullable userId) {
+    if (!userId) {
+      [self sendCordovaSuccessPluginResultAsNull:command];
+    } else {
+      [self sendCordovaSuccessPluginResultWithString:userId andCommand:command];
+    }
+  }];
 }
 
 - (void)setSdkAuthenticationSignature:(CDVInvokedUrlCommand *)command {
@@ -330,7 +294,7 @@ bool useBrazeUIForInAppMessages;
 }
 
 - (void)enableSdk:(CDVInvokedUrlCommand *)command {
-  [self.braze setEnabled:YES];
+  [self.braze _requestEnableSDKOnNextAppRun];
 }
 
 - (void)wipeData:(CDVInvokedUrlCommand *)command {
@@ -697,6 +661,10 @@ bool useBrazeUIForInAppMessages;
 }
 
 // MARK: - BrazeUI
+- (void)launchNewsFeed:(CDVInvokedUrlCommand *)command {
+  NSLog(@"News Feed UI not supported on iOS.");
+}
+
 - (void)launchContentCards:(CDVInvokedUrlCommand *)command {
   [self.braze.contentCards requestRefresh];
   
@@ -704,6 +672,123 @@ bool useBrazeUIForInAppMessages;
   UIWindow *keyWindow = [[UIApplication sharedApplication] keyWindow];
   UIViewController *mainViewController = keyWindow.rootViewController;
   [mainViewController presentViewController:contentCardsModal animated:YES completion:nil];
+}
+
+// MARK: - News Feed
+- (void)getNewsFeed:(CDVInvokedUrlCommand *)command {
+  [self.braze.newsFeed requestRefresh];
+  NSArray *cardCategories = [self getCardCategoriesFromStringArray:command.arguments];
+  int argumentsMask = [self getMaskFromCategories:cardCategories];
+
+  if (argumentsMask == 0) {
+    [self sendCordovaErrorPluginResultWithString:@"Category could not be set." andCommand:command];
+    return;
+  }
+  
+  NSMutableArray *mappedCards = [NSMutableArray array];
+  NSError *e = nil;
+
+  for (BRZNewsFeedCard *card_item in self.braze.newsFeed.cards) {
+    int cardItemMask = [self getMaskFromCategories:card_item.categories];
+    if ((argumentsMask & cardItemMask) == cardItemMask) {
+      NSArray *jsonArray = [NSJSONSerialization JSONObjectWithData:[card_item json]
+                                                           options:kNilOptions
+                                                             error: &e];
+      [mappedCards addObject:jsonArray];
+    }
+  }
+
+  [self sendCordovaSuccessPluginResultWithArray:mappedCards andCommand:command];
+}
+
+- (void)getCardCountForCategories:(CDVInvokedUrlCommand *)command {
+  NSArray *cardCategories = [self getCardCategoriesFromStringArray:command.arguments];
+  int argumentsMask = [self getMaskFromCategories:cardCategories];
+
+  if (argumentsMask == 0) {
+    [self sendCordovaErrorPluginResultWithString:@"Category could not be set." andCommand:command];
+    return;
+  }
+  
+  NSInteger cardCount = 0;
+  for (BRZNewsFeedCard *card_item in self.braze.newsFeed.cards) {
+    int cardItemMask = [self getMaskFromCategories:card_item.categories];
+    if ((argumentsMask & cardItemMask) == cardItemMask) {
+      cardCount++;
+    }
+  }
+  [self sendCordovaSuccessPluginResultWithInt:cardCount andCommand:command];
+}
+
+- (void)getUnreadCardCountForCategories:(CDVInvokedUrlCommand *)command {
+  NSArray *cardCategories = [self getCardCategoriesFromStringArray:command.arguments];
+  int argumentsMask = [self getMaskFromCategories:cardCategories];
+
+  if (argumentsMask == 0) {
+    [self sendCordovaErrorPluginResultWithString:@"Category could not be set." andCommand:command];
+    return;
+  }
+
+  NSInteger unreadCardCount = 0;
+  for (BRZNewsFeedCard *card in self.braze.newsFeed.cards) {
+    if (card.viewed) {
+      continue;
+    }
+    int cardItemMask = [self getMaskFromCategories:card.categories];
+    if ((argumentsMask & cardItemMask) == cardItemMask) {
+      unreadCardCount++;
+    }
+  }
+  [self sendCordovaSuccessPluginResultWithInt:unreadCardCount andCommand:command];
+}
+
+- (NSArray *)getCardCategoriesFromStringArray:(NSArray *)categories {
+  NSMutableArray *cardCategories = [NSMutableArray array];
+  NSArray *allCases = @[
+    [BRZNewsFeedCardCategory advertising],
+    [BRZNewsFeedCardCategory announcements],
+    [BRZNewsFeedCardCategory news],
+    [BRZNewsFeedCardCategory social]
+  ];
+  if (categories != nil && categories.count > 0) {
+    for (NSString *categoryString in categories) {
+      if ([categoryString.lowercaseString isEqualToString:@"advertising"]) {
+        [cardCategories addObject:[BRZNewsFeedCardCategory advertising]];
+      } else if ([categoryString.lowercaseString isEqualToString:@"announcements"]) {
+        [cardCategories addObject:[BRZNewsFeedCardCategory announcements]];
+      } else if ([categoryString.lowercaseString isEqualToString:@"news"]) {
+        [cardCategories addObject:[BRZNewsFeedCardCategory news]];
+      } else if ([categoryString.lowercaseString isEqualToString:@"social"]) {
+        [cardCategories addObject:[BRZNewsFeedCardCategory social]];
+      } else if ([categoryString.lowercaseString isEqualToString:@"no_category"]) {
+        [cardCategories addObject:[BRZNewsFeedCardCategory none]];
+      } else if ([categoryString.lowercaseString isEqualToString:@"all"]) {
+        return allCases;
+      }
+    }
+  }
+  return cardCategories;
+}
+
+- (int)getMaskFromCategories:(NSArray *)categories {
+  int categoryMask = 0;
+  if (categories != nil && categories.count > 0) {
+    // Iterate over the categories and get the category mask
+    for (BRZNewsFeedCardCategory *cardCategory in categories) {
+      if ([cardCategory isEqual:[BRZNewsFeedCardCategory advertising]]) {
+        categoryMask |= 1 << 2;
+      } else if ([cardCategory isEqual:[BRZNewsFeedCardCategory announcements]]) {
+        categoryMask |= 1 << 3;
+      }  else if ([cardCategory isEqual:[BRZNewsFeedCardCategory news]]) {
+        categoryMask |= 1 << 1;
+      }  else if ([cardCategory isEqual:[BRZNewsFeedCardCategory social]]) {
+        categoryMask |= 1 << 4;
+      }  else if ([cardCategory isEqual:[BRZNewsFeedCardCategory none]]) {
+        categoryMask |= 1 << 0;
+      }
+    }
+  }
+  return categoryMask;
 }
 
 // MARK: - Content Cards
