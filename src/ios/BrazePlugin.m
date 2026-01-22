@@ -66,8 +66,6 @@ bool useBrazeUIForInAppMessages;
   isInAppMessageSubscribed = NO;
   useBrazeUIForInAppMessages = YES;
 
-  [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(didFinishLaunchingListener:) name:UIApplicationDidFinishLaunchingNotification object:nil];
-
   // Set automatic push handling
   if (![[self sanitizeString:self.disableAutomaticPushHandling] isEqualToString:@"yes"]) {
     [AppDelegate swizzleHostAppDelegate];
@@ -75,9 +73,11 @@ bool useBrazeUIForInAppMessages;
   } else {
     NSLog(@"Automatic push handling disabled.");
   }
+    
+    [self setup];
 }
 
-- (void)didFinishLaunchingListener:(NSNotification *)notification {
+- (void)setup {
   BRZConfiguration *configuration = [[BRZConfiguration alloc] initWithApiKey:self.APIKey
                                                                     endpoint:self.apiEndpoint];
   
